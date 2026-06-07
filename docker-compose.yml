@@ -1,0 +1,64 @@
+version: '3.8'
+
+services:
+  nginx:
+    image: nginx:alpine
+    container_name: test-nginx
+    networks:
+      - testnet
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: test-postgres
+    environment:
+      POSTGRES_USER: test
+      POSTGRES_PASSWORD: test
+    networks:
+      - testnet
+
+  mysql:
+    image: mysql:8
+    container_name: test-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+    networks:
+      - testnet
+
+  mock-ssh:
+    image: alpine
+    container_name: test-ssh
+    command: sh -c "apk add --no-cache socat && socat TCP-LISTEN:22,fork,reuseaddr EXEC:'echo SSH-2.0-OpenSSH_8.9p1 Ubuntu' & tail -f /dev/null"
+    networks:
+      - testnet
+
+  udp-echo:
+    image: alpine
+    container_name: test-udp
+    command: sh -c "apk add --no-cache socat && socat UDP-LISTEN:9999,fork - & tail -f /dev/null"
+    networks:
+      - testnet
+
+  netprobe:
+    build: .
+    container_name: netprobe-runner
+    depends_on:
+      - nginx
+      - postgres
+      - mysql
+      - mock-ssh
+      - udp-echo
+    networks:
+      - testnet
+    cap_add:
+      - NET_RAW          # для ICMP
+    volumes:
+      - ./reports:/app/reports   # чтобы сохранить HTML-отчёт на хост
+    environment:
+      - DISPLAY=${DISPLAY:-}     # если нужны уведомления на рабочем столе (опционально)
+    # Команда запускается из ENTRYPOINT Dockerfile (test.sh)
+    # Можем переопределить, если нужно
+    command: /app/test.sh
+
+networks:
+  testnet:
+    driver: bridge
